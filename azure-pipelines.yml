@@ -1,93 +1,19 @@
 pool: Velociraptor-Agent
-trigger:
+trigger: none
+pr:
   - main
   - feature/*
+
+variables:
+  tf_working_dir: '$(System.DefaultWorkingDirectory)/env/dev'
+
 stages:
-  - stage: TerraformValidationPlan
-    displayName: Terraform Validation And Plan
+  - stage: PreChecks
+    displayName: Pre-Checks and Secret Scans
     jobs:
-      - job: TerraformValidationPlan
-        displayName: Terraform Validation And Plan
+      - job: SecretScan
+        displayName: Secret Scanning
         steps:
-        - task: TerraformInstaller@1
-          displayName: Terraform Install
-          inputs:
-            terraformVersion: 'latest'
-        - task: TerraformTask@5
-          displayName: Terraform Init
-          inputs:
-            provider: 'azurerm'
-            command: 'init'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            backendServiceArm: 'Velociraptor-Auth'
-            backendAzureRmStorageAccountName: 'azuredevopssta420'
-            backendAzureRmContainerName: 'tfstate'
-            backendAzureRmKey: 'terraform.tfstate'
-        - task: TerraformTask@5
-          displayName: Terraform Fmt
-          inputs:
-            provider: 'azurerm'
-            command: 'custom'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            commandOptions: '-check -recursive'
-            outputTo: 'console'
-            customCommand: 'fmt'
-            environmentServiceNameAzureRM: 'Velociraptor-Auth'
-        - task: TerraformTask@5
-          displayName: Terraform Validate
-          inputs:
-            provider: 'azurerm'
-            command: 'validate'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-        - task: TerraformTask@5
-          displayName: Terraform Plan
-          inputs:
-            provider: 'azurerm'
-            command: 'plan'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            environmentServiceNameAzureRM: 'Velociraptor-Auth'
-  - stage: SecurityScan
-    displayName: Security Scan
-    dependsOn: TerraformValidationPlan
-    condition: succeeded()
-    jobs:
-      - job: SecurityScan
-        displayName: Security Scan
-        
-        steps:
-        - task: PowerShell@2
-          displayName: TFLint Scan
-          continueOnError: true
-          inputs:
-            targetType: 'inline'
-            script: |
-              cd "$(System.DefaultWorkingDirectory)"
-              
-              tflint --init
-              
-              cd "$(System.DefaultWorkingDirectory)/env/dev"
-              
-              tflint --recursive
-        - task: PowerShell@2
-          displayName: Trivy Scan
-          continueOnError: true
-          inputs:
-            targetType: 'inline'
-            script: |
-              cd "$(System.DefaultWorkingDirectory)"
-              
-              trivy config --tf-vars .\env\dev\terraform.tfvars .
-              
-              trivy config --tf-vars .\env\dev\terraform.tfvars  --severity HIGH,CRITICAL  --exit-code 1 --format table .
-        - task: PowerShell@2
-          displayName: Checkov Scan
-          continueOnError: true
-          inputs:
-            targetType: 'inline'
-            script: |
-              cd "$(System.DefaultWorkingDirectory)"
-              
-              checkov -d .
         - task: PowerShell@2
           displayName: Gitleaks Scan
           continueOnError: true
@@ -95,7 +21,6 @@ stages:
             targetType: 'inline'
             script: |
               cd "$(System.DefaultWorkingDirectory)"
-              
               gitleaks detect -c .gitleaks.toml --source . -v
         - task: PowerShell@2
           displayName: TruffleHog Scan
@@ -104,12 +29,113 @@ stages:
             targetType: 'inline'
             script: |
               cd "$(System.DefaultWorkingDirectory)"
-              
               trufflehog filesystem .
+
+  - stage: TerraformValidationPlan
+    displayName: Terraform Validation And Plan
+    dependsOn: PreChecks
+    jobs:
+      - job: TerraformValidationPlan
+        displayName: Terraform Validation And Plan
+        steps:
+        - task: TerraformInstaller@1
+          displayName: Terraform Install
+          inputs:
+            terraformVersion: 'latest'
+            
+        - task: Cache@2
+          displayName: Cache Terraform Providers
+          inputs:
+            key: 'terraform | "$(Agent.OS)" | $(tf_working_dir)/.terraform.lock.hcl'
+            path: '$(tf_working_dir)/.terraform'
+            
+        - task: TerraformTask@5
+          displayName: Terraform Init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(tf_working_dir)'
+            backendServiceArm: 'Velociraptor-Auth'
+            backendAzureRmStorageAccountName: 'azuredevopssta420'
+            backendAzureRmContainerName: 'tfstate'
+            backendAzureRmKey: 'terraform.tfstate'
+            
+        - task: TerraformTask@5
+          displayName: Terraform Fmt
+          inputs:
+            provider: 'azurerm'
+            command: 'custom'
+            workingDirectory: '$(tf_working_dir)'
+            commandOptions: '-check -recursive'
+            outputTo: 'console'
+            customCommand: 'fmt'
+            environmentServiceNameAzureRM: 'Velociraptor-Auth'
+            
+        - task: TerraformTask@5
+          displayName: Terraform Validate
+          inputs:
+            provider: 'azurerm'
+            command: 'validate'
+            workingDirectory: '$(tf_working_dir)'
+            
+        - task: TerraformTask@5
+          displayName: Terraform Plan
+          inputs:
+            provider: 'azurerm'
+            command: 'plan'
+            workingDirectory: '$(tf_working_dir)'
+            commandOptions: '-out=$(Build.ArtifactStagingDirectory)/tfplan'
+            environmentServiceNameAzureRM: 'Velociraptor-Auth'
+            
+        - task: PublishPipelineArtifact@1
+          displayName: Publish Terraform Plan
+          inputs:
+            targetPath: '$(Build.ArtifactStagingDirectory)/tfplan'
+            artifact: 'tfplan'
+            publishLocation: 'pipeline'
+
+  - stage: SecurityScan
+    displayName: Security Scan
+    dependsOn: TerraformValidationPlan
+    condition: succeeded()
+    jobs:
+      - job: IaCScan
+        displayName: IaC Security Scan
+        steps:
+        - task: PowerShell@2
+          displayName: TFLint Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              tflint --init
+              cd "$(tf_working_dir)"
+              tflint --recursive
+              
+        - task: PowerShell@2
+          displayName: Trivy Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              trivy config --tf-vars .\env\dev\terraform.tfvars .
+              trivy config --tf-vars .\env\dev\terraform.tfvars --severity HIGH,CRITICAL --exit-code 1 --format table .
+              
+        - task: PowerShell@2
+          displayName: Checkov Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              checkov -d .
+
   - stage: ManualApproval
     displayName: Manual Approval
     dependsOn: SecurityScan
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    condition: succeeded()
     jobs:
       - job: ManualApproval
         displayName: Manual Approval Before Apply
@@ -121,27 +147,35 @@ stages:
 
   - stage: TerraformApply
     dependsOn: ManualApproval
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    condition: succeeded()
     displayName: Terraform Apply
     jobs:
       - job: TerraformApply
         displayName: Terraform Apply
         steps:
+        - task: DownloadPipelineArtifact@2
+          displayName: Download Terraform Plan
+          inputs:
+            buildType: 'current'
+            artifactName: 'tfplan'
+            targetPath: '$(Pipeline.Workspace)/tfplan'
+            
         - task: TerraformTask@5
           displayName: Terraform Init
           inputs:
             provider: 'azurerm'
             command: 'init'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+            workingDirectory: '$(tf_working_dir)'
             backendServiceArm: 'Velociraptor-Auth'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
             backendAzureRmKey: 'terraform.tfstate'
+            
         - task: TerraformTask@5
           displayName: Terraform Apply
           inputs:
             provider: 'azurerm'
             command: 'apply'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            commandOptions: '-auto-approve'
+            workingDirectory: '$(tf_working_dir)'
+            commandOptions: '$(Pipeline.Workspace)/tfplan/tfplan'
             environmentServiceNameAzureRM: 'Velociraptor-Auth'
