@@ -18,7 +18,7 @@ stages:
             provider: 'azurerm'
             command: 'init'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            backendServiceArm: 'azure-ado-connection'
+            backendServiceArm: 'ADO connection'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
             backendAzureRmKey: 'terraform.tfstate'
@@ -31,7 +31,7 @@ stages:
             commandOptions: '-check -recursive'
             outputTo: 'console'
             customCommand: 'fmt'
-            environmentServiceNameAzureRM: 'azure-ado-connection'
+            environmentServiceNameAzureRM: 'ADO connection'
         - task: TerraformTask@5
           displayName: Terraform Validate
           inputs:
@@ -44,7 +44,7 @@ stages:
             provider: 'azurerm'
             command: 'plan'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            environmentServiceNameAzureRM: 'azure-ado-connection'
+            environmentServiceNameAzureRM: 'ADO connection'
   - stage: SecurityScan
     displayName: Security Scan
     dependsOn: TerraformValidationPlan
@@ -132,7 +132,7 @@ stages:
             provider: 'azurerm'
             command: 'init'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            backendServiceArm: 'azure-ado-connection'
+            backendServiceArm: 'ADO connection'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
             backendAzureRmKey: 'terraform.tfstate'
