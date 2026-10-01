@@ -13,6 +13,7 @@ resource "azurerm_linux_virtual_machine" "linux_vm" {
   admin_username                  = each.value.admin_username
   disable_password_authentication = true
   network_interface_ids           = [data.azurerm_network_interface.linux_nic[each.key].id]
+  allow_extension_operations      = false
 
   admin_ssh_key {
     username   = each.value.admin_username
@@ -33,14 +34,16 @@ resource "azurerm_linux_virtual_machine" "linux_vm" {
 }
 
 resource "azurerm_windows_virtual_machine" "windows_vm" {
-  for_each              = var.windows_virtual_machines
-  name                  = each.value.name
-  resource_group_name   = each.value.resource_group_name
-  location              = each.value.location
-  size                  = each.value.size
-  admin_username        = each.value.admin_username
-  admin_password        = each.value.admin_password
-  network_interface_ids = [data.azurerm_network_interface.windows_nic[each.key].id]
+  for_each                   = var.windows_virtual_machines
+  name                       = each.value.name
+  resource_group_name        = each.value.resource_group_name
+  location                   = each.value.location
+  size                       = each.value.size
+  admin_username             = each.value.admin_username
+  admin_password             = each.value.admin_password
+  network_interface_ids      = [data.azurerm_network_interface.windows_nic[each.key].id]
+  allow_extension_operations = false
+  encryption_at_host_enabled = true
 
   os_disk {
     caching              = each.value.os_disk_caching

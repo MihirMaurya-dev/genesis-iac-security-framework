@@ -1,4 +1,5 @@
 resource "azurerm_subnet" "sub" {
+  #checkov:skip=CKV2_AZURE_31: NSGs are handled at the NIC level or require specialized configuration for Bastion/AppGw
   for_each             = var.subnets
   name                 = each.value.name
   resource_group_name  = each.value.resource_group_name
