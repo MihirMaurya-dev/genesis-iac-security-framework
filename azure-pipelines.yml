@@ -1,0 +1,146 @@
+pool: Velociraptor-Agent
+trigger:
+  - feature/*
+stages:
+  - stage: TerraformValidationPlan
+    displayName: Terraform Validation And Plan
+    jobs:
+      - job: TerraformValidationPlan
+        displayName: Terraform Validation And Plan
+        steps:
+        - task: TerraformInstaller@1
+          displayName: Terraform Install
+          inputs:
+            terraformVersion: 'latest'
+        - task: TerraformTask@5
+          displayName: Terraform Init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+            backendServiceArm: 'azure-ado-connection'
+            backendAzureRmStorageAccountName: 'azuredevopssta420'
+            backendAzureRmContainerName: 'tfstate'
+            backendAzureRmKey: 'terraform.tfstate'
+        - task: TerraformTask@5
+          displayName: Terraform Fmt
+          inputs:
+            provider: 'azurerm'
+            command: 'custom'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+            commandOptions: '-check -recursive'
+            outputTo: 'console'
+            customCommand: 'fmt'
+            environmentServiceNameAzureRM: 'azure-ado-connection'
+        - task: TerraformTask@5
+          displayName: Terraform Validate
+          inputs:
+            provider: 'azurerm'
+            command: 'validate'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+        - task: TerraformTask@5
+          displayName: Terraform Plan
+          inputs:
+            provider: 'azurerm'
+            command: 'plan'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+            environmentServiceNameAzureRM: 'azure-ado-connection'
+  - stage: SecurityScan
+    displayName: Security Scan
+    dependsOn: TerraformValidationPlan
+    condition: succeeded()
+    jobs:
+      - job: SecurityScan
+        displayName: Security Scan
+        
+        steps:
+        - task: PowerShell@2
+          displayName: TFLint Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              
+              tflint --init
+              
+              cd "$(System.DefaultWorkingDirectory)/env/dev"
+              
+              tflint --recursive
+        - task: PowerShell@2
+          displayName: Trivy Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              
+              trivy config --tf-vars .\env\dev\terraform.tfvars .
+              
+              trivy config --tf-vars .\env\dev\terraform.tfvars  --severity HIGH,CRITICAL  --exit-code 1 --format table .
+        - task: PowerShell@2
+          displayName: Checkov Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              
+              checkov -d .
+        - task: PowerShell@2
+          displayName: Gitleaks Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              
+              gitleaks detect -c .gitleaks.toml --source . -v
+        - task: PowerShell@2
+          displayName: TruffleHog Scan
+          continueOnError: true
+          inputs:
+            targetType: 'inline'
+            script: |
+              cd "$(System.DefaultWorkingDirectory)"
+              
+              trufflehog filesystem .
+  - stage: ManualApproval
+    displayName: Manual Approval
+    dependsOn: SecurityScan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: ManualApproval
+        displayName: Manual Approval Before Apply
+        pool: server
+        steps:
+        - task: ManualValidation@1
+          inputs:
+            instructions: 'please approve the pipeline'
+
+  - stage: TerraformApply
+    dependsOn: ManualApproval
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    displayName: Terraform Apply
+    jobs:
+      - job: TerraformApply
+        displayName: Terraform Apply
+        steps:
+        - task: TerraformTask@5
+          displayName: Terraform Init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+            backendServiceArm: 'azure-ado-connection'
+            backendAzureRmStorageAccountName: 'azuredevopssta420'
+            backendAzureRmContainerName: 'tfstate'
+            backendAzureRmKey: 'terraform.tfstate'
+        - task: TerraformTask@5
+          displayName: Terraform Apply
+          inputs:
+            provider: 'azurerm'
+            command: 'apply'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
+            commandOptions: '-auto-approve'
+            environmentServiceNameAzureRM: 'ADO connection'

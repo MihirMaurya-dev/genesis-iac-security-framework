@@ -1,0 +1,30 @@
+title = "Strict Gitleaks Configuration for Terraform/DevOps"
+
+[extend]
+# This ensures we KEEP the ~160 built-in rules (AWS, Azure, GitHub keys, etc.)
+# and just append our custom Terraform rule on top.
+useDefault = true
+
+[[rules]]
+id = "terraform-hardcoded-credentials"
+description = "Detects hardcoded passwords, secrets, and tokens in Terraform files"
+regex = '''(?i)(password|passwd|pwd|secret|token|api_key|access_key|client_secret|admin_password)\s*=\s*".+"'''
+secretGroup = 0
+tags = ["terraform", "credentials"]
+
+
+[allowlist]
+description = "Global allowlist to prevent false positives from hashes"
+# We are NOT ignoring any dummy values. Every password assignment will be flagged.
+
+# Ignore files/folders that safely contain system hashes (not passwords)
+paths = [
+    '''\.terraform/.*''',
+    '''terraform\.tfstate.*''',
+    '''\.terraform\.lock\.hcl''',
+    '''\.tflint\.hcl''',
+    '''package-lock\.json''',
+    '''yarn\.lock''',
+    '''node_modules/.*''',
+    '''vendor/.*'''
+]
