@@ -18,7 +18,7 @@ stages:
             provider: 'azurerm'
             command: 'init'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            backendServiceArm: 'ADO connection'
+            backendServiceArm: 'Velociraptor-Auth'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
             backendAzureRmKey: 'terraform.tfstate'
@@ -31,7 +31,7 @@ stages:
             commandOptions: '-check -recursive'
             outputTo: 'console'
             customCommand: 'fmt'
-            environmentServiceNameAzureRM: 'ADO connection'
+            environmentServiceNameAzureRM: 'Velociraptor-Auth'
         - task: TerraformTask@5
           displayName: Terraform Validate
           inputs:
@@ -44,7 +44,7 @@ stages:
             provider: 'azurerm'
             command: 'plan'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            environmentServiceNameAzureRM: 'ADO connection'
+            environmentServiceNameAzureRM: 'Velociraptor-Auth'
   - stage: SecurityScan
     displayName: Security Scan
     dependsOn: TerraformValidationPlan
@@ -132,7 +132,7 @@ stages:
             provider: 'azurerm'
             command: 'init'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
-            backendServiceArm: 'ADO connection'
+            backendServiceArm: 'Velociraptor-Auth'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
             backendAzureRmKey: 'terraform.tfstate'
@@ -143,4 +143,4 @@ stages:
             command: 'apply'
             workingDirectory: '$(System.DefaultWorkingDirectory)/env/dev'
             commandOptions: '-auto-approve'
-            environmentServiceNameAzureRM: 'ADO connection'
+            environmentServiceNameAzureRM: 'Velociraptor-Auth'
