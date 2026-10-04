@@ -19,3 +19,6 @@ variable "virtual_networks" {
   }))
   default = null
 }
+variable "subnets" {}
+variable "public_ips" {}
+variable "linux_virtual_machines" {}

@@ -4,8 +4,18 @@ pr:
   - main
   - feature/*
 
+parameters:
+  - name: environment
+    displayName: 'Deployment Environment'
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - qa
+      - prod
+
 variables:
-  tf_working_dir: '$(System.DefaultWorkingDirectory)/env/dev'
+  tf_working_dir: '$(System.DefaultWorkingDirectory)/env/${{ parameters.environment }}'
 
 stages:
   - stage: PreChecks
@@ -58,7 +68,7 @@ stages:
             backendServiceArm: 'Velociraptor-Auth'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
-            backendAzureRmKey: 'terraform.tfstate'
+            backendAzureRmKey: '${{ parameters.environment }}.terraform.tfstate'
             
         - task: TerraformTask@5
           displayName: Terraform Fmt
@@ -120,8 +130,8 @@ stages:
             targetType: 'inline'
             script: |
               cd "$(System.DefaultWorkingDirectory)"
-              trivy config --tf-vars .\env\dev\terraform.tfvars .
-              trivy config --tf-vars .\env\dev\terraform.tfvars --severity HIGH,CRITICAL --exit-code 1 --format table .
+              trivy config --tf-vars "$(tf_working_dir)/terraform.tfvars" .
+              trivy config --tf-vars "$(tf_working_dir)/terraform.tfvars" --severity HIGH,CRITICAL --exit-code 1 --format table .
               
         - task: PowerShell@2
           displayName: Checkov Scan
@@ -169,7 +179,7 @@ stages:
             backendServiceArm: 'Velociraptor-Auth'
             backendAzureRmStorageAccountName: 'azuredevopssta420'
             backendAzureRmContainerName: 'tfstate'
-            backendAzureRmKey: 'terraform.tfstate'
+            backendAzureRmKey: '${{ parameters.environment }}.terraform.tfstate'
             
         - task: TerraformTask@5
           displayName: Terraform Apply

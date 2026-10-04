@@ -1,10 +1,1 @@
-variable "virtual_networks" {
-  description = "The name of the virtual network."
-  type = map(object({
-    name                = string
-    location            = string
-    resource_group_name = string
-    address_space       = list(string)
-    tags                = map(string)
-  }))
-}
+variable "virtual_networks" {}
